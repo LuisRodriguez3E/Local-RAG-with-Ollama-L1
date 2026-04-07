@@ -4,13 +4,13 @@
 https://www.youtube.com/watch?v=c5jHhMXmXyo
 
 <h2>L1 Local RAG Chatbot</h2>
-<h3>
+
+```
   A simple RAG application that lets users ask questions against a selected knowledge base made from Wikipedia content.
 
   It finds the most relevant information from a vector db, then uses a local LLM to produce answers from that
   retrieved material.
-
-</h3>
+```
 
 <h2>Prerequisites</h2>
 <ul>
