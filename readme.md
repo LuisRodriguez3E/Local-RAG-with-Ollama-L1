@@ -1,9 +1,8 @@
 <h1>Build a local RAG with Ollama</h1>
 
 <h3>This project is based on / inspired by the following YouTube tutorial:</h3>
-```
-https://www.youtube.com/watch?v=c5jHhMXmXyo<h3>
-```
+https://www.youtube.com/watch?v=c5jHhMXmXyo
+
 
 <h2>Prerequisites</h2>
 <ul>
@@ -23,7 +22,7 @@ cd ../Local-RAG-With-Ollama-L1
 ```
 
 
-<h3>Ensure Ollama models are available:</h3>
+<h3>2. Ensure Ollama models are available:</h3>
 
 ```
 ollama pull llama3.1:8b
@@ -31,7 +30,8 @@ ollama pull mxbai-embed-large
 ```
 
 
-<h2>Run ChatBot</h2>
+<h2>3. Run ChatBot</h2>
+
 ```
 streamlit run 3_chatbot.py
 ```
