@@ -21,11 +21,28 @@ https://www.youtube.com/watch?v=c5jHhMXmXyo
 
 
 <h2>Installation</h2>
-<h3>1. Clone the repository:</h3>
+<h3>0. Clone the repository:</h3>
 
 ```
 git clone https://github.com/LuisRodriguez3E/Local-RAG-with-Ollama-L1.git
 cd ../Local-RAG-With-Ollama-L1
+```
+
+<h3>2. Create a virtual environment</h3>
+
+```
+In Visual Code 
+Open a Terminal 
+cd to where the project was downloaded
+
+python -m venv venv
+```
+
+<h3>3. Activate the virtual environment</h3>
+
+```
+venv\Scripts\Activate
+(or on Mac): source venv/bin/activate
 ```
 
 
@@ -39,7 +56,6 @@ ollama pull mxbai-embed-large
 
 <h2>3. Run ChatBot</h2>
 
-- Open a terminal in VS Code
 - Execute the following command:
 
 ```
