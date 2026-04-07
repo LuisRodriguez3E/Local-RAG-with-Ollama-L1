@@ -1,24 +1,17 @@
 <h1>Build a local RAG with Ollama</h1>
 
-<h2>Watch the full tutorial on my YouTube Channel</h2>
-<div>
-
-<a href="https://youtu.be/c5jHhMXmXyo">
-    <img src="thumbnail_small.png" alt="Thomas Janssen Youtube" width="200"/>
-</a>
-</div>
-
 <h2>Prerequisites</h2>
 <ul>
-  <li>Python 3.11+</li>
+  <li>Python 3.12.7</li>
+  <li>llama3.1:8b</li>
 </ul>
 
 <h2>Installation</h2>
 <h3>1. Clone the repository:</h3>
 
 ```
-git clone https://github.com/ThomasJanssen-tech/Local-RAG-with-Ollama
-cd Local-RAG-With-Ollama
+git clone https://github.com/LuisRodriguez3E/Local-RAG-with-Ollama-L1.git
+cd Local-RAG-With-Ollama-L1
 ```
 
 <h3>2. Create a virtual environment</h3>
