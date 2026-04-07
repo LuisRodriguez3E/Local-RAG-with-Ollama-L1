@@ -3,6 +3,14 @@
 <h3>This project is based on / inspired by the following YouTube tutorial:</h3>
 https://www.youtube.com/watch?v=c5jHhMXmXyo
 
+<h2>L1 Local RAG Chatbot</h2>
+<h3>
+  A simple RAG application that lets users ask questions against a selected knowledge base made from Wikipedia content.
+
+  It finds the most relevant information from a vector db, then uses a local LLM to produce answers from that
+  retrieved material.
+
+</h3>
 
 <h2>Prerequisites</h2>
 <ul>
@@ -10,7 +18,6 @@ https://www.youtube.com/watch?v=c5jHhMXmXyo
   <li>Chat Model: llama3.1:8b</li>
   <li>Embedding Model: mxbai-embed-large</li>
 </ul>
-
 
 
 <h2>Installation</h2>
@@ -32,9 +39,19 @@ ollama pull mxbai-embed-large
 
 <h2>3. Run ChatBot</h2>
 
+- Open a terminal in VS Code
+- Execute the following command:
+
 ```
+python run 1_scraping_wikipedia.py
+python run 2_chunking_embedding_ingestion.py
 streamlit run 3_chatbot.py
 ```
+
+<h3>Chatbot</h3>
+<div>
+	<img src="Ragchatbot.png" alt="Screenshot of Rag chat bot" width="200"/>
+</div>
 
 <h2>Further reading</h2>
 <ul>
