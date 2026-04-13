@@ -1,0 +1,83 @@
+Local-RAG-with-Ollama-L1: 3-File AI Workflow Explanation
+
+Overview
+This project works as a small retrieval-augmented generation (RAG) pipeline.
+The three main Python files work together in sequence:
+1. Collect knowledge from Wikipedia.
+2. Turn that knowledge into vector-searchable chunks.
+3. Use retrieval plus a language model to answer user questions.
+
+File 1: 1_scraping_wikipedia.py
+What this file does
+- Reads the keywords from keywords.xlsx.
+- Uses the Wikipedia API to search for matching article titles.
+- Downloads the text for each matching Wikipedia page.
+- Stores the results in datasets\data.txt as JSON lines.
+- Deduplicates pages so the same Wikipedia page is not stored twice.
+
+How it is related to AI
+- This file is the knowledge collection step for the AI system.
+- It does not generate answers itself, but it gathers the raw text that the AI system will later search and use.
+- In AI terms, this is data acquisition or corpus creation.
+- Without this file, the chatbot would have no local knowledge base to work from.
+
+Why it matters in the full workflow
+- The chatbot can only answer from the content that was collected here.
+- If a topic is missing from datasets\data.txt, later steps cannot answer it reliably.
+
+File 2: 2_chunking_embedding_ingestion.py
+What this file does
+- Reads datasets\data.txt created by File 1.
+- Splits each article into smaller text chunks.
+- Uses an embedding model from Ollama to convert each chunk into a vector.
+- Stores those vectors and their metadata in Chroma DB.
+- Saves the article title and source URL with each chunk.
+
+How it is related to AI
+- This file is the vectorization and indexing step.
+- Embeddings are a core AI technique that convert text into numeric representations.
+- Those numeric vectors let the system find text that is semantically related to a user question.
+- In AI terms, this file builds the retrieval index used by the chatbot.
+
+Why it matters in the full workflow
+- The chatbot does not scan every article line by line during each question.
+- Instead, it searches the embeddings stored in Chroma DB to quickly find the most relevant chunks.
+- This is what makes the system a RAG system instead of a plain chatbot.
+
+File 3: 3_chatbot.py
+What this file does
+- Runs the Streamlit user interface for the chatbot.
+- Accepts a question from the user.
+- Searches the Chroma vector database for relevant chunks.
+- Filters the retrieved chunks so the answer stays tied to the right source.
+- Sends the selected context to the language model.
+- Returns a short summary answer plus the relevant source URL when appropriate.
+- Supports same-session use by handling new topics separately from follow-up questions.
+
+How it is related to AI
+- This file is the actual AI application layer.
+- It combines retrieval and generation:
+  - Retrieval means finding the best stored knowledge from Chroma.
+  - Generation means having the language model turn that knowledge into a natural-language answer.
+- The language model can be served through Groq or another configured provider.
+- This file is where the user experiences the AI system directly.
+
+Why it matters in the full workflow
+- This is the final step that turns stored knowledge into useful answers.
+- It makes the project interactive and user-facing.
+- It also controls answer quality by deciding how context is retrieved, filtered, and passed to the model.
+
+How the 3 files work together
+- File 1 collects Wikipedia content.
+- File 2 transforms that content into embeddings and stores it in a vector database.
+- File 3 retrieves the best matching chunks and asks the language model to produce an answer.
+
+AI summary
+- File 1 = data collection for the AI knowledge base.
+- File 2 = embedding and retrieval index creation.
+- File 3 = retrieval-augmented chatbot interface and answer generation.
+
+In short, these three files together create a local RAG pipeline:
+- gather data
+- embed and index data
+- retrieve relevant data and generate an answer

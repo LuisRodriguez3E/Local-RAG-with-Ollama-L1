@@ -1,0 +1,310 @@
+LOCAL RAG CHATBOT
+CHANGES AND END-TO-END FLOW
+
+1. PROJECT GOAL
+
+This project is a local retrieval-augmented generation (RAG) chatbot.
+It builds a small knowledge base from Wikipedia pages, stores the text in a
+local Chroma vector database, and answers user questions by retrieving the
+most relevant chunks and sending that context to a chat model.
+
+
+2. WHAT WAS CHANGED
+
+The following changes were made during this work:
+
+1. Bright Data scraping was removed from the application flow.
+   - The old scraper depended on a Bright Data dataset trigger and snapshot flow.
+   - The scraper was rewritten to use the public Wikipedia MediaWiki API instead.
+
+2. The Wikipedia scraping step was simplified.
+   - keywords.xlsx is read.
+   - Each keyword is searched against the Wikipedia API.
+   - Matching page titles are fetched.
+   - Each article is saved as one JSON line in datasets/data.txt.
+
+3. The embedding ingestion step was updated to match the new dataset format.
+   - It now reads the JSON lines written by the Wikipedia scraper.
+   - It extracts raw_text, title, and url.
+   - It chunks article text and stores the chunks in Chroma.
+
+4. The chatbot runtime was simplified.
+   - The old version used a LangChain tool-calling agent.
+   - That agent path was producing bad output such as ToolMessage and
+     AIMessageChunk content leaking into the UI.
+   - The chatbot was rewritten to use direct retrieval plus a normal prompt.
+
+5. The chatbot was hardened against bad model output.
+   - Internal tool and chunk markers are filtered.
+   - Source lines are appended only after a clean answer is generated.
+   - Very short low-signal retrieval chunks are skipped before prompt assembly.
+
+6. Multi-turn chat in the Streamlit session was kept.
+   - The app uses st.session_state.messages.
+   - Follow-up questions can use recent chat history for retrieval and answer generation.
+   - The app no longer "restarts" conceptually after one question inside the same browser session.
+
+7. A Clear chat button was added.
+   - This clears the current in-memory Streamlit conversation.
+
+8. Groq support was added for the chat model.
+   - The chat model can now be selected through MODEL_PROVIDER in .env.
+   - If MODEL_PROVIDER is groq, the app validates GROQ_API_KEY and the
+     langchain-groq package before startup.
+   - Embeddings still use Ollama.
+
+9. Documentation was updated.
+   - README now describes the Wikipedia API flow.
+   - README also documents the optional Groq setup.
+
+10. Error handling was improved in the scraper.
+   - Wikipedia request failures now exit with a cleaner message.
+
+
+3. WHY THE CHATBOT WAS RETURNING BAD DATA BEFORE
+
+The bad output came from the old agent-based path.
+Instead of returning only the final answer, the app was vulnerable to leaking
+internal tool output and model chunk metadata into the user-facing response.
+
+Examples of the wrong kind of data:
+ - ToolMessage
+ - AIMessageChunk
+ - tool call payloads
+ - fabricated source links
+
+The fix was to remove the tool-calling agent from the chat path and replace it
+with a simpler retrieve-then-answer flow.
+
+
+4. CURRENT FILE-BY-FILE FLOW
+
+A. 1_scraping_wikipedia.py
+
+Purpose:
+ - Build a local article dataset from Wikipedia.
+
+Flow:
+1. Load environment variables.
+2. Read keywords.xlsx.
+3. Validate that the Keyword column exists.
+4. Use the Pages column if present, otherwise default to 1 page per keyword.
+5. Search Wikipedia titles through the MediaWiki API.
+6. Fetch each page extract and canonical URL.
+7. Deduplicate records by page ID.
+8. Write one JSON object per article to datasets/data.txt.
+
+Output format per line:
+ - keyword
+ - pageid
+ - title
+ - url
+ - raw_text
+
+
+B. 2_chunking_embedding_ingestion.py
+
+Purpose:
+ - Convert scraped article text into vector embeddings stored in Chroma.
+
+Flow:
+1. Load environment variables.
+2. Read datasets/data.txt.
+3. Parse JSON lines into Python objects.
+4. Initialize the Ollama embedding model from EMBEDDING_MODEL.
+5. Delete the previous Chroma database if it exists.
+6. Create a new Chroma collection.
+7. Split each article into chunks with RecursiveCharacterTextSplitter.
+8. Add chunk documents into Chroma with source and title metadata.
+
+Result:
+ - A local vector database stored at DATABASE_LOCATION.
+
+
+C. 3_chatbot.py
+
+Purpose:
+ - Run the Streamlit chatbot UI and answer questions from the local vector store.
+
+Startup flow:
+1. Load environment variables.
+2. Verify Python 3.12.
+3. Initialize cached embeddings, vector store, and chat model.
+4. If MODEL_PROVIDER is groq:
+   - Require GROQ_API_KEY.
+   - Require the langchain-groq package.
+5. Initialize Streamlit UI.
+6. Initialize st.session_state.messages if it does not exist.
+7. Render a Clear chat button.
+8. Verify that the Chroma database exists.
+9. Render previous messages from the current Streamlit session.
+
+Question-answer flow:
+1. User enters a prompt in st.chat_input.
+2. The app copies prior messages for history-aware retrieval.
+3. A retrieval query is built.
+   - If there is prior history, the query includes recent conversation history
+     and the current question.
+4. similarity_search retrieves the top matching documents from Chroma.
+5. Retrieved chunks are serialized into prompt context.
+6. Very short chunks are skipped.
+7. A direct answer prompt is created using:
+   - recent conversation history
+   - current user question
+   - retrieved Wikipedia context
+8. The selected chat model generates a response.
+9. The response text is cleaned.
+   - Internal tool/chunk markers are blocked.
+   - Existing source text embedded in the model answer is trimmed.
+10. The app appends a clean source list from retrieval metadata.
+11. The user message and assistant message are written to st.session_state.messages.
+12. Streamlit shows the updated conversation in the UI.
+
+
+5. CURRENT MODEL AND PROVIDER DESIGN
+
+Embeddings:
+ - Provider: Ollama
+ - Used in:
+   - ingestion step
+   - runtime retrieval step
+
+Chat model:
+ - Selected through:
+   - CHAT_MODEL
+   - MODEL_PROVIDER
+
+Supported current use in this repo:
+ - Ollama for chat
+ - Groq for chat
+ - OpenAI and Anthropic examples are also present in .env comments
+
+Important:
+ - Switching chat to Groq does NOT remove Ollama entirely.
+ - Ollama is still required for embeddings unless the embedding layer is changed too.
+
+
+6. CURRENT ENVIRONMENT VARIABLES THAT MATTER
+
+EMBEDDING_MODEL
+ - Ollama embedding model name
+
+CHAT_MODEL
+ - Chat model name for the selected provider
+
+MODEL_PROVIDER
+ - Current provider name such as:
+   - ollama
+   - groq
+   - openai
+   - anthropic
+
+GROQ_API_KEY
+ - Required only when MODEL_PROVIDER is groq
+
+DATABASE_LOCATION
+ - Chroma database folder
+
+COLLECTION_NAME
+ - Chroma collection name
+
+DATASET_STORAGE_FOLDER
+ - Folder containing datasets/data.txt
+
+
+7. CURRENT USER EXPERIENCE
+
+What works now:
+ - Ask a question.
+ - Ask a follow-up question in the same browser session.
+ - Receive a normal answer with source links.
+ - Avoid raw internal agent or tool metadata in the answer.
+
+What does NOT persist yet:
+ - The Streamlit app does not currently save chat sessions to disk.
+ - If the page is fully closed or the app restarts, the in-memory chat history is lost.
+ - The Codex conversation itself is not being saved by this project.
+
+
+8. VERIFICATION THAT WAS DONE
+
+The following checks were completed:
+
+1. Syntax checks
+   - py_compile was run successfully on the updated Python files.
+
+2. Embedding rebuild
+   - 2_chunking_embedding_ingestion.py was run successfully.
+   - The Chroma database was rebuilt from the local dataset.
+
+3. Two-turn runtime behavior
+   - The direct answer path was tested with:
+     - "what is python"
+     - "what was python"
+   - The chatbot returned clean answers and retained context between turns.
+
+4. Wikipedia scraper structure
+   - The scraper code compiled successfully.
+   - Live HTTP verification from this sandbox was blocked by outbound network restrictions.
+   - The script now fails with a clean request error instead of a noisy traceback.
+
+
+9. HOW TO RUN THE CURRENT PROJECT
+
+1. Activate the virtual environment:
+   venv\Scripts\activate
+
+2. Build the dataset:
+   python 1_scraping_wikipedia.py
+
+3. Build embeddings:
+   python 2_chunking_embedding_ingestion.py
+
+4. Start the chatbot:
+   streamlit run 3_chatbot.py
+
+
+10. HOW TO SWITCH CHAT TO GROQ
+
+1. Install the Groq package:
+   pip install langchain-groq
+
+2. Update .env:
+   CHAT_MODEL = "llama-3.1-8b-instant"
+   MODEL_PROVIDER = "groq"
+   GROQ_API_KEY = "gsk_your_key_here"
+
+3. Keep embeddings on Ollama:
+   EMBEDDING_MODEL = "mxbai-embed-large"
+
+4. Restart Streamlit.
+
+
+11. IF YOU WANT CHAT HISTORY TO SURVIVE APP RESTARTS
+
+That is a separate feature and is not implemented yet.
+
+Recommended approach:
+1. Save each conversation to a JSON or text file in a local folder.
+2. Store:
+   - chat ID
+   - created_at
+   - updated_at
+   - message list
+3. Add a Streamlit sidebar to:
+   - create a new chat
+   - load a saved chat
+   - resume an older chat
+
+
+12. SHORT SUMMARY
+
+The chatbot now uses:
+ - Wikipedia API instead of Bright Data
+ - local Chroma retrieval
+ - direct prompt-based answering instead of a tool-calling agent
+ - cleaner answer generation with source URLs
+ - session-based multi-turn chat
+ - optional Groq support for the chat model
+
+The remaining missing feature is persistent saved chat history across app restarts.

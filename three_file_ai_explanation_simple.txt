@@ -1,0 +1,56 @@
+Simple Explanation of the 3 Main Files
+
+Big picture
+This project is a small AI question-answering system.
+It works in 3 steps:
+1. Collect information.
+2. Organize that information so the computer can search it.
+3. Answer questions using that information.
+
+File 1: 1_scraping_wikipedia.py
+Simple explanation
+This file goes to Wikipedia and gathers article text based on the topics listed in keywords.xlsx.
+It saves that information into a local file so the project has its own set of knowledge to work with.
+
+Why this matters for AI
+AI needs information before it can answer questions.
+This file is the part that collects the information.
+You can think of it as building the reading material for the AI system.
+
+File 2: 2_chunking_embedding_ingestion.py
+Simple explanation
+This file takes the Wikipedia text and breaks it into smaller pieces.
+Then it converts those pieces into a format that makes them easy to search.
+Finally, it stores them in the local database.
+
+Why this matters for AI
+AI systems are better when they can quickly find the most useful information.
+This file prepares the data so the chatbot can search it efficiently instead of reading everything from the beginning every time.
+
+File 3: 3_chatbot.py
+Simple explanation
+This file is the chatbot itself.
+It shows the chat screen, accepts the user’s question, looks up the most relevant stored information, and asks the AI model to write a response.
+It also shows the source when the source is relevant.
+
+Why this matters for AI
+This is the part people interact with.
+It combines searching and answering, so the AI can give responses based on the stored Wikipedia information instead of guessing.
+
+How they work together
+- File 1 collects the information.
+- File 2 organizes the information for fast searching.
+- File 3 uses that information to answer questions.
+
+Very short summary
+- File 1 = get the knowledge
+- File 2 = prepare the knowledge
+- File 3 = use the knowledge to answer questions
+
+How this is related to AI overall
+This project is an example of retrieval-augmented generation, often called RAG.
+That means the AI does not rely only on what it already knows.
+It first retrieves useful information from a local knowledge base, then generates an answer based on that information.
+
+Simple one-line version
+This project collects Wikipedia content, turns it into searchable AI-ready data, and uses it to power a chatbot.

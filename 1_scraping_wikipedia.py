@@ -1,111 +1,146 @@
-#################################################################################################################################################################
-###############################   1.  IMPORTING MODULES AND INITIALIZING VARIABLES   ############################################################################
-#################################################################################################################################################################
-
-from dotenv import load_dotenv
-import os
-import requests
 import json
-import pandas as pd
-import glob
+import os
+from pathlib import Path
+from urllib.parse import quote
 
-pd.options.mode.chained_assignment = None
+import pandas as pd
+import requests
+from dotenv import load_dotenv
+
+
+WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
+REQUEST_TIMEOUT_SECONDS = 30
+
 
 load_dotenv()
 
-###############################   HEADERS (DON'T CHANGE)   #######################################################################################################
-headers = {
-    'Authorization': 'Bearer '+os.getenv('BRIGHTDATA_API_KEY'),
-    'Content-Type': 'application/json',
-}
 
-headers_status = {
-    'Authorization': 'Bearer '+os.getenv('BRIGHTDATA_API_KEY'),
-}
+def load_keywords(file_path: str) -> pd.DataFrame:
+    keywords = pd.read_excel(file_path)
 
-keywords = pd.read_excel("keywords.xlsx")
+    if "Keyword" not in keywords.columns:
+        raise ValueError("keywords.xlsx must contain a 'Keyword' column.")
 
-#################################################################################################################################################################
-###############################   2.  IF SnapshotID IS NOT SET IN .XLSX FILE, TRIGGER CREATION OF THE SNAPSHOT   ################################################
-#################################################################################################################################################################
+    if "Pages" not in keywords.columns:
+        keywords["Pages"] = 1
 
-file_exists = os.path.isfile(os.getenv("SNAPSHOT_STORAGE_FILE"))
+    keywords = keywords.dropna(subset=["Keyword"]).copy()
+    keywords["Keyword"] = keywords["Keyword"].astype(str).str.strip()
+    keywords = keywords[keywords["Keyword"] != ""]
+    keywords["Pages"] = (
+        pd.to_numeric(keywords["Pages"], errors="coerce")
+        .fillna(1)
+        .astype(int)
+        .clip(lower=1, upper=10)
+    )
+
+    return keywords
 
 
-if not file_exists:
+def search_titles(session: requests.Session, keyword: str, limit: int) -> list[str]:
+    response = session.get(
+        WIKIPEDIA_API_URL,
+        params={
+            "action": "query",
+            "format": "json",
+            "list": "search",
+            "srsearch": keyword,
+            "srlimit": limit,
+            "utf8": 1,
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
 
-    params = {
-        "dataset_id": "gd_lr9978962kkjr3nx49",
-        "include_errors": "true",
-        "type": "discover_new",
-        "discover_by": "keyword",
+    results = response.json().get("query", {}).get("search", [])
+    titles = [result["title"] for result in results if result.get("title")]
+
+    return titles or [keyword]
+
+
+def fetch_page(session: requests.Session, title: str, keyword: str) -> dict | None:
+    response = session.get(
+        WIKIPEDIA_API_URL,
+        params={
+            "action": "query",
+            "format": "json",
+            "formatversion": 2,
+            "prop": "extracts|info",
+            "titles": title,
+            "redirects": 1,
+            "explaintext": 1,
+            "inprop": "url",
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+
+    pages = response.json().get("query", {}).get("pages", [])
+    if not pages:
+        return None
+
+    page = pages[0]
+    raw_text = (page.get("extract") or "").strip()
+
+    if page.get("missing") or not raw_text:
+        return None
+
+    resolved_title = page.get("title", title)
+    resolved_url = page.get("fullurl") or (
+        "https://en.wikipedia.org/wiki/" + quote(resolved_title.replace(" ", "_"))
+    )
+
+    return {
+        "keyword": keyword,
+        "pageid": page.get("pageid"),
+        "title": resolved_title,
+        "url": resolved_url,
+        "raw_text": raw_text,
     }
 
-    json_data = []
 
-    for ind in keywords.index:
+def main() -> None:
+    dataset_dir = Path(os.getenv("DATASET_STORAGE_FOLDER", "datasets"))
+    output_file = dataset_dir / "data.txt"
+    keywords = load_keywords("keywords.xlsx")
 
-        json_data.append({"keyword":keywords.loc[ind, "Keyword"],"pages_load":str(keywords.loc[ind, "Pages"])})
+    session = requests.Session()
+    session.headers.update(
+        {"User-Agent": "Local-RAG-with-Ollama-L1/1.0 (Wikipedia ingestion)"}
+    )
 
-    response = requests.post('https://api.brightdata.com/datasets/v3/trigger', params=params, headers=headers, json=json_data)
+    dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    result = json.loads(response.content)
+    records: list[dict] = []
+    seen_page_ids: set[int] = set()
 
-    with open(os.getenv("SNAPSHOT_STORAGE_FILE"), "a") as f:
-        f.write(str(result["snapshot_id"]))
+    for row in keywords.itertuples(index=False):
+        titles = search_titles(session, row.Keyword, row.Pages)
 
+        for title in titles:
+            record = fetch_page(session, title, row.Keyword)
+            if not record:
+                continue
 
-else:
+            page_id = record.get("pageid")
+            if page_id in seen_page_ids:
+                continue
 
-#################################################################################################################################################################
-###############################   3.  IF SnapshotID IS SET, GET BACK THE CRAWLED DATA   #########################################################################
-#################################################################################################################################################################
+            if page_id is not None:
+                seen_page_ids.add(page_id)
 
+            records.append(record)
+            print(f"Fetched: {record['title']} ({record['url']})")
 
-###############################   CHECK WHETHER ALL WEBSITES ARE CRAWLED   #######################################################################################
+    with output_file.open("w", encoding="utf-8") as file_handle:
+        for record in records:
+            file_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    files = glob.glob(os.getenv("DATASET_STORAGE_FOLDER")+"*")	
-
-    for f in files:
-        os.remove(f)
-
-
-
-    f = open(os.getenv("SNAPSHOT_STORAGE_FILE"),"r")
-    snapshot_id = f.read()
-
-    response = requests.get('https://api.brightdata.com/datasets/v3/progress/'+snapshot_id, headers=headers_status)
-    
-    status = response.json()['status']
-
-    print("status")
-    print(status)
-
-
-    snapshot_ready = False
-
-    if(status == "ready"):
-        print("Snapshot is ready")
-        snapshot_ready = True
-    else:
-        print("Snapshot is NOT READY YET")
+    print(f"Wrote {len(records)} Wikipedia articles to {output_file}")
 
 
-    print("")
-
-###############################   IF ALL WEBSITES ARE READY, FETCH DATA AND WRITE TO FILES   ######################################################################
-
-    if snapshot_ready:
-        print("== > All articles are ready - start writing data to datasets directory")
-
-
-        response = requests.get('https://api.brightdata.com/datasets/v3/snapshot/'+snapshot_id, headers=headers)
-
-        if not os.path.exists(os.getenv("DATASET_STORAGE_FOLDER")):
-             os.makedirs(os.getenv("DATASET_STORAGE_FOLDER"))
-
-        with open(os.getenv("DATASET_STORAGE_FOLDER")+"data.txt", "wb") as f:
-            f.write(response.content)
-
-    else:
-         print("== > Not all articles are scraped yet - try again in a few minutes")
+if __name__ == "__main__":
+    try:
+        main()
+    except requests.RequestException as exc:
+        raise SystemExit(f"Wikipedia API request failed: {exc}") from exc
